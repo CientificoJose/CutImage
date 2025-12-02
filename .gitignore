@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Next.js build artifacts
+.next/
+out/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment files
+.env*
+!.env.example
+
+# Storage (processed files)
+storage/
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
