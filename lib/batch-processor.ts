@@ -7,6 +7,7 @@ import sharp from "sharp"
 
 import { parseXlsx } from "@/lib/xlsx"
 import { getBatchRecord, updateBatchRecord, type BatchError } from "@/lib/batch-store"
+import { titleGenerator } from "@/lib/title-generator"
 import {
   ensureDirExists,
   getProcessedBatchDir,
@@ -45,6 +46,10 @@ export async function processBatch(batchId: string): Promise<BatchProcessResult>
     errors: [],
   }))
 
+  // Limpiar cache de títulos para este batch
+  titleGenerator.clearCache()
+  const hasTitleGeneration = record.tituloColumnIndex !== null && record.skuColumnIndex !== null
+
   try {
     const sourceBuffer = await readFile(record.uploadPath)
     const parsed = await parseXlsx(sourceBuffer)
@@ -60,6 +65,31 @@ export async function processBatch(batchId: string): Promise<BatchProcessResult>
     const totalRows = processedRows.length
 
     for (let rowIndex = 0; rowIndex < processedRows.length; rowIndex++) {
+      // Procesar generación de títulos si están disponibles las columnas
+      if (hasTitleGeneration) {
+        const tituloIdx = record.tituloColumnIndex!
+        const skuIdx = record.skuColumnIndex!
+        const originalTitle = processedRows[rowIndex][tituloIdx]
+        const sku = processedRows[rowIndex][skuIdx]
+
+        if (originalTitle && sku) {
+          try {
+            const newTitle = await generateTitleWithRetry(sku, originalTitle)
+            processedRows[rowIndex][tituloIdx] = newTitle
+          } catch (error) {
+            errors.push({
+              row: rowIndex + 2,
+              column: tituloIdx + 1,
+              message:
+                error instanceof Error
+                  ? error.message
+                  : "Error al generar título con ChatGPT",
+            })
+          }
+        }
+      }
+
+      // Procesar imágenes (URLs)
       for (const columnIndex of record.urlColumnIndexes) {
         const url = processedRows[rowIndex][columnIndex]
         if (!url) continue
@@ -188,4 +218,22 @@ function buildResultFileName(originalFileName: string) {
   const ext = path.extname(originalFileName) || ".xlsx"
   const withoutExt = originalFileName.replace(new RegExp(`${ext}$`), "")
   return `${withoutExt}_cutimage${ext}`
+}
+
+async function generateTitleWithRetry(sku: string, originalTitle: string, maxRetries = 2): Promise<string> {
+  let lastError: Error | null = null
+  
+  for (let i = 0; i <= maxRetries; i++) {
+    try {
+      return await titleGenerator.generateUniqueTitle(sku, originalTitle)
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error))
+      // Esperar un poco antes de reintentar (backoff exponencial)
+      if (i < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)))
+      }
+    }
+  }
+  
+  throw lastError ?? new Error("Error desconocido al generar título")
 }

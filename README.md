@@ -6,6 +6,7 @@ Herramienta profesional para limpiar y estandarizar imágenes en lote a partir d
 
 - Carga de archivos XLSX (hasta 15 columnas) con detección automática de columnas que contengan URLs.
 - Procesamiento por lotes con recorte automático de 160px en la parte superior de cada imagen usando `sharp`.
+- **Generación de títulos únicos con ChatGPT**: Si el XLSX contiene columnas `titulo` y `SKU`, genera automáticamente títulos alternativos que no se repiten para el mismo SKU.
 - Seguimiento de estado en tiempo real (subida → procesamiento → resultados) y manejo de errores por fila.
 - Generación de un nuevo XLSX con las URLs actualizadas que apuntan al servidor local (`/processed/...`).
 - Descarga del XLSX final y visualización de URLs procesadas directamente en la UI.
@@ -19,6 +20,7 @@ Herramienta profesional para limpiar y estandarizar imágenes en lote a partir d
 - TypeScript
 - pnpm
 - `exceljs`, `sharp`
+- OpenAI API (gpt-4o-mini por defecto)
 
 ## Estructura relevante
 
@@ -33,6 +35,7 @@ app/
 lib/
   batch-store.ts           # Registro persistente de batches (JSON)
   batch-processor.ts       # Pipeline de recorte + generación de XLSX
+  title-generator.ts       # Cliente ChatGPT + cache anti-duplicados por SKU
   storage.ts               # Helpers para rutas en /storage
 scripts/
   cleanup-old-files.ts     # Limpieza de archivos > 48h
@@ -44,10 +47,16 @@ storage/
 
 - Node.js 22+
 - pnpm 10+
+- API Key de OpenAI (opcional, solo si usas generación de títulos)
 
 ## Instalación y desarrollo
 
 ```bash
+# Copiar variables de entorno
+cp .env.example .env.local
+
+# Editar .env.local y agregar tu OPENAI_API_KEY
+
 pnpm install
 pnpm run dev
 ```
@@ -98,8 +107,18 @@ Ejemplo de cron (host o contenedor):
 - `pnpm run build && pnpm start` – producción
 - `pnpm ts-node scripts/cleanup-old-files.ts` – limpieza manual
 
+## Variables de entorno
+
+| Variable | Descripción | Valor por defecto |
+|----------|-------------|-------------------|
+| `OPENAI_API_KEY` | Tu API key de OpenAI | (requerida para títulos) |
+| `OPENAI_MODEL` | Modelo a usar | `gpt-4o-mini` |
+
 ## Notas
 
 - El sistema detecta columnas de URLs por encabezado (`url`, `imagen`, `foto`, `img`) y por contenido (busca valores `http(s)` en filas de datos).
+- **Columnas especiales**: Si tu XLSX tiene columnas `titulo`/`título` y `SKU`/`código`, se activará la generación de títulos con ChatGPT.
+- Los títulos generados son únicos por SKU: si el mismo SKU aparece varias veces, cada fila recibirá un título diferente.
 - Los archivos procesados se almacenan en `storage/cropped`; los XLSX finales en `storage/results`.
 - El `batchId` y metadatos se guardan como JSON en `storage/batches/`.
+

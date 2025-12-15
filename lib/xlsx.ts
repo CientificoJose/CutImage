@@ -4,6 +4,8 @@ export interface ParsedXlsxData {
   columns: string[]
   rows: string[][]
   urlColumnIndexes: number[]
+  tituloColumnIndex: number | null
+  skuColumnIndex: number | null
 }
 
 const MAX_COLUMNS = 15
@@ -17,6 +19,8 @@ function sanitizeCellValue(value: unknown) {
 }
 
 const URL_HEADER_KEYWORDS = ["url", "imagen", "image", "foto", "img"]
+const TITULO_KEYWORDS = ["titulo", "título", "title", "nombre", "name"]
+const SKU_KEYWORDS = ["sku", "código", "codigo", "code", "id", "ref", "referencia"]
 
 function isLikelyUrl(value: string) {
   return /^https?:\/\//i.test(value.trim())
@@ -42,6 +46,16 @@ function detectUrlColumns(columns: string[], rows: string[][]) {
   }
 
   return Array.from(indexes)
+}
+
+function detectSpecialColumn(columns: string[], keywords: string[]): number | null {
+  for (let idx = 0; idx < columns.length; idx++) {
+    const lower = columns[idx].toLowerCase()
+    if (keywords.some((keyword) => lower.includes(keyword))) {
+      return idx
+    }
+  }
+  return null
 }
 
 export async function parseXlsx(buffer: Buffer): Promise<ParsedXlsxData> {
@@ -92,9 +106,14 @@ export async function parseXlsx(buffer: Buffer): Promise<ParsedXlsxData> {
     throw new Error("No se detectaron columnas de URLs. Renombra las columnas para incluir 'URL'.")
   }
 
+  const tituloColumnIndex = detectSpecialColumn(columns, TITULO_KEYWORDS)
+  const skuColumnIndex = detectSpecialColumn(columns, SKU_KEYWORDS)
+
   return {
     columns,
     rows,
     urlColumnIndexes,
+    tituloColumnIndex,
+    skuColumnIndex,
   }
 }

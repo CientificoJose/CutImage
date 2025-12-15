@@ -18,6 +18,8 @@ export interface BatchRecord {
   columns: string[]
   totalRows: number
   urlColumnIndexes: number[]
+  tituloColumnIndex: number | null
+  skuColumnIndex: number | null
   processedRows: number
   createdAt: string
   updatedAt: string
@@ -33,6 +35,8 @@ export interface CreateBatchRecordInput {
   columns: string[]
   totalRows: number
   urlColumnIndexes: number[]
+  tituloColumnIndex: number | null
+  skuColumnIndex: number | null
   baseUrl?: string
 }
 
@@ -47,6 +51,8 @@ export async function createBatchRecord(input: CreateBatchRecordInput) {
     columns: input.columns,
     totalRows: input.totalRows,
     urlColumnIndexes: input.urlColumnIndexes,
+    tituloColumnIndex: input.tituloColumnIndex,
+    skuColumnIndex: input.skuColumnIndex,
     processedRows: 0,
     createdAt: now,
     updatedAt: now,

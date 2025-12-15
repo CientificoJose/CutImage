@@ -58,6 +58,8 @@ export async function POST(request: Request) {
       columns: parsed.columns,
       totalRows: parsed.rows.length,
       urlColumnIndexes: parsed.urlColumnIndexes,
+      tituloColumnIndex: parsed.tituloColumnIndex,
+      skuColumnIndex: parsed.skuColumnIndex,
       baseUrl: resolveBaseUrl(request),
     })
 
