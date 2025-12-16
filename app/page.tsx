@@ -215,6 +215,7 @@ export default function Home() {
         processedRows: batchStatus.processedRows,
         totalRows: batchStatus.totalRows,
         errorCount: batchStatus.errors?.length ?? 0,
+        errors: batchStatus.errors ?? [],
       }
     : undefined
 

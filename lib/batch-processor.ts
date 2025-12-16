@@ -95,14 +95,23 @@ export async function processBatch(batchId: string): Promise<BatchProcessResult>
         if (!url) continue
 
         try {
-          const processedUrl = await downloadCropAndStoreImage(
+          const result = await downloadCropAndStoreImage(
             url,
             batchId,
             rowIndex,
             columnIndex,
             record.baseUrl,
           )
-          processedRows[rowIndex][columnIndex] = processedUrl
+          processedRows[rowIndex][columnIndex] = result.url
+          
+          // Registrar advertencia si la imagen no se recortó
+          if (result.skipped && result.reason) {
+            errors.push({
+              row: rowIndex + 2,
+              column: columnIndex + 1,
+              message: `⚠️ ${result.reason} - imagen guardada sin recortar`,
+            })
+          }
         } catch (error) {
           errors.push({
             row: rowIndex + 2,
@@ -163,19 +172,29 @@ function shouldUpdateProgress(processedCount: number, totalRows: number) {
   return processedCount % 5 === 0
 }
 
+interface CropResult {
+  url: string
+  skipped: boolean
+  reason?: string
+}
+
 async function downloadCropAndStoreImage(
   url: string,
   batchId: string,
   rowIndex: number,
   columnIndex: number,
   baseUrl?: string,
-) {
+): Promise<CropResult> {
   const imageBuffer = await downloadImage(url)
-  const croppedBuffer = await cropImage(imageBuffer)
+  const cropResult = await cropImage(imageBuffer)
   const fileName = `${rowIndex + 1}-${columnIndex + 1}-${randomUUID()}.jpg`
   const processedPath = getProcessedImagePath(batchId, fileName)
-  await saveFile(processedPath, croppedBuffer)
-  return getPublicProcessedUrl(batchId, fileName, baseUrl)
+  await saveFile(processedPath, cropResult.buffer)
+  return {
+    url: getPublicProcessedUrl(batchId, fileName, baseUrl),
+    skipped: cropResult.skipped,
+    reason: cropResult.reason,
+  }
 }
 
 async function downloadImage(url: string) {
@@ -187,13 +206,20 @@ async function downloadImage(url: string) {
   return Buffer.from(arrayBuffer)
 }
 
-async function cropImage(buffer: Buffer) {
+async function cropImage(buffer: Buffer): Promise<{ buffer: Buffer; skipped: boolean; reason?: string }> {
   const metadata = await sharp(buffer).metadata()
   if (!metadata.width || !metadata.height) {
     throw new Error("No se pudo leer la información de la imagen")
   }
+  
+  // Si la imagen es muy pequeña, la guardamos sin recortar
   if (metadata.height <= TOP_CROP_HEIGHT) {
-    throw new Error(`La imagen es menor o igual a ${TOP_CROP_HEIGHT}px de alto`)
+    const converted = await sharp(buffer).jpeg({ quality: 90 }).toBuffer()
+    return { 
+      buffer: converted, 
+      skipped: true, 
+      reason: `Imagen muy pequeña (${metadata.height}px alto, mínimo requerido: ${TOP_CROP_HEIGHT + 1}px)` 
+    }
   }
 
   const croppedHeight = metadata.height - TOP_CROP_HEIGHT
@@ -202,7 +228,7 @@ async function cropImage(buffer: Buffer) {
     .jpeg({ quality: 90 })
     .toBuffer()
 
-  return croppedBuffer
+  return { buffer: croppedBuffer, skipped: false }
 }
 
 async function buildResultWorkbook(columns: string[], rows: string[][]) {

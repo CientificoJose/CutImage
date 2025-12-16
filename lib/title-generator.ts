@@ -6,9 +6,11 @@
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || ''
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini'
 
+const MAX_TITLE_LENGTH = 60
+
 export class TitleGenerator {
   private skuTitleCache: Map<string, Set<string>> = new Map()
-  private maxRetries = 3
+  private maxRetries = 5
 
   /**
    * Genera un título único para un SKU dado
@@ -33,7 +35,9 @@ export class TitleGenerator {
       const isDuplicate = normalizedNew === normalizedOriginal || 
         Array.from(usedTitles).some(t => this.normalizeTitle(t) === normalizedNew)
       
-      if (!isDuplicate && newTitle.trim().length > 0) {
+      const isTooLong = newTitle.length > MAX_TITLE_LENGTH
+      
+      if (!isDuplicate && !isTooLong && newTitle.trim().length > 0) {
         usedTitles.add(newTitle)
         this.skuTitleCache.set(sku, usedTitles)
         return newTitle
@@ -41,7 +45,11 @@ export class TitleGenerator {
     }
 
     // Fallback: agregar sufijo único si todos los reintentos fallan
-    const fallback = `${originalTitle} - Variante ${usedTitles.size + 1}`
+    let fallback = `${originalTitle} - V${usedTitles.size + 1}`
+    // Truncar fallback si excede el límite
+    if (fallback.length > MAX_TITLE_LENGTH) {
+      fallback = fallback.substring(0, MAX_TITLE_LENGTH - 3) + '...'
+    }
     usedTitles.add(fallback)
     this.skuTitleCache.set(sku, usedTitles)
     return fallback
@@ -64,15 +72,22 @@ export class TitleGenerator {
       ? `\n\nNota: Intento ${attempt + 1}, sé más creativo y diferente.` 
       : ''
 
-    const prompt = `Eres un experto en copywriting de e-commerce. Tu tarea es reescribir el siguiente título de producto para que sea ligeramente diferente pero mantenga el mismo significado y atractivo comercial.
+    const prompt = `Eres un experto en copywriting para Mercado Libre. Tu tarea es reescribir el siguiente título de producto siguiendo las mejores prácticas de la plataforma.
 
 Título original: "${originalTitle}"
 
-Reglas:
+Mejores prácticas de Mercado Libre:
+- Estructura recomendada: [Producto] + [Marca] + [Modelo] + [Características clave]
+- Usa palabras clave que los compradores buscan
+- Evita mayúsculas innecesarias, signos de exclamación o palabras como "OFERTA", "PROMOCIÓN"
+- No uses abreviaturas confusas
+- Prioriza claridad y relevancia para el buscador
+
+Reglas obligatorias:
 1. El nuevo título debe ser DIFERENTE al original (no solo cambiar una palabra)
-2. Mantén la esencia y características del producto
-3. Usa sinónimos, reordena palabras o reformula
-4. Mantén una longitud similar (±20% caracteres)
+2. Mantén la esencia, marca y características del producto
+3. Usa sinónimos, reordena palabras o reformula para mejor SEO
+4. **MÁXIMO 60 CARACTERES** - esto es obligatorio, no lo excedas
 5. No agregues información que no esté en el original
 6. Responde SOLO con el nuevo título, sin comillas ni explicaciones${usedContext}${creativityHint}`
 
@@ -85,7 +100,7 @@ Reglas:
       body: JSON.stringify({
         model: OPENAI_MODEL,
         messages: [
-          { role: 'system', content: 'Eres un asistente de copywriting. Responde únicamente con el título reescrito.' },
+          { role: 'system', content: 'Eres un experto en SEO y copywriting para Mercado Libre. Responde únicamente con el título optimizado, máximo 60 caracteres.' },
           { role: 'user', content: prompt }
         ],
         temperature: 0.8 + (attempt * 0.1), // Aumentar creatividad en reintentos

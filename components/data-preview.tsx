@@ -7,6 +7,12 @@ import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import type { FileData } from "@/app/page"
 
+interface BatchError {
+  row: number
+  column?: number
+  message: string
+}
+
 interface DataPreviewProps {
   data: FileData
   onProcess: () => void
@@ -18,6 +24,7 @@ interface DataPreviewProps {
     processedRows: number
     totalRows: number
     errorCount: number
+    errors: BatchError[]
   }
 }
 
@@ -162,16 +169,48 @@ export function DataPreview({ data, onProcess, onBack, isProcessing, processErro
         <Card className="p-4 bg-muted/10 border-border/40">
           <div className="flex flex-col gap-3">
             {progress && (
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div>
-                  <p className="text-sm text-muted-foreground">Estado actual</p>
-                  <p className="text-lg font-semibold text-foreground capitalize">{progress.status}</p>
+              <>
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Estado actual</p>
+                    <p className="text-lg font-semibold text-foreground capitalize">{progress.status}</p>
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    Progreso: {progress.processedRows} / {progress.totalRows}
+                  </div>
+                  <div className="text-sm text-muted-foreground">Errores: {progress.errorCount}</div>
                 </div>
-                <div className="text-sm text-muted-foreground">
-                  Progreso: {progress.processedRows} / {progress.totalRows}
-                </div>
-                <div className="text-sm text-muted-foreground">Errores: {progress.errorCount}</div>
-              </div>
+
+                {/* Barra de progreso */}
+                {progress.status === "processing" && (
+                  <div className="w-full bg-muted/30 rounded-full h-2 overflow-hidden">
+                    <div
+                      className="bg-primary h-full transition-all duration-300 ease-out"
+                      style={{ width: `${(progress.processedRows / progress.totalRows) * 100}%` }}
+                    />
+                  </div>
+                )}
+
+                {/* Lista de errores detallados */}
+                {progress.errors.length > 0 && (
+                  <div className="mt-2 border-t border-border/30 pt-3">
+                    <p className="text-sm font-medium text-destructive mb-2 flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4" />
+                      Errores detectados ({progress.errors.length})
+                    </p>
+                    <div className="max-h-40 overflow-y-auto space-y-1 text-xs font-mono bg-destructive/5 rounded-md p-2">
+                      {progress.errors.map((error, idx) => (
+                        <div key={idx} className="text-destructive/90 py-1 border-b border-destructive/10 last:border-0">
+                          <span className="text-muted-foreground">Fila {error.row}</span>
+                          {error.column && <span className="text-muted-foreground">, Col {error.column}</span>}
+                          <span className="mx-2">→</span>
+                          <span>{error.message}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
             )}
 
             {processError && (
